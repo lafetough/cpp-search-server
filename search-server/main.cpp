@@ -64,26 +64,15 @@ public:
 
         const vector<string> words = SplitIntoWordsNoStop(document);
 
-        map<string, map<int, double>> mm;
+        map<string, double> word_to_document_id_to_count;
 
         for (string s : words) {
-            ++mm[s][document_id];
+            ++word_to_document_id_to_count[s];
         }
         for (string s : words) {
-            double d = mm[s][document_id] / words.size();
+            double d = word_to_document_id_to_count[s] / words.size();
             word_to_document_freqs_[s][document_id] = d;
         }
-        // отладка
-
-        /*for (auto a : word_to_document_freqs_) {
-            for (auto aa : a.second) {
-                cout << "word: "s << a.first << "|| id: "s << aa.first << "|| TF: "s << aa.second << endl;
-                cout << endl;
-            }
-        }
-
-        cout << endl;
-        */
 
     }
 
@@ -151,8 +140,6 @@ private:
         if (query_words.empty()) {
             return { {} };
         }
-
-        //map<string, set<int>> copy = content;
         set<string> stop_words;
 
         for (string s : query_words) {
@@ -163,18 +150,9 @@ private:
             }
         }
 
-        /* for (string s : stop_words) {
-             cout << s << " "s;
-         }
-         cout << endl;
-
-         */
-
         map<string, map<int, double>> copy_to_manipulate = content;
 
         map<string, double> IDF;
-
-        // -----------------------------------------------------------------------------------------------------------
 
         set<int> to_del;
 
@@ -184,6 +162,7 @@ private:
                     to_del.insert(a.first);
                 }
             }
+        }
 
         for (string s : query_words) {
             if (copy_to_manipulate.count(s) > 0) {
@@ -193,7 +172,6 @@ private:
 
                 IDF[s] = static_cast<double>(log(static_cast<double>(document_count_) / static_cast<double>(num_of_doc_with_word)));
 
-                //cout << "Word: "s << s << " IDF = "s << "log( " << document_count_ << " / "s << num_of_doc_with_word << " ) == " << IDF.at(s) << endl;
 
             }
         }
@@ -201,43 +179,36 @@ private:
         vector<double> to_calc;
         map<int, double> output;
 
-        /*for (const auto& a : IDF) {
-           cout << "Word :"s << a.first << " || IDF: " << a.second << endl;
-        }
-        cout << endl;
-        */
+
 
         int max_id = 0;
 
-        for (const auto a : copy_to_manipulate) {
-            for (const auto aa : a.second) {
-                if (aa.first > max_id) {
-                    max_id = aa.first;
-                    //cout << "Max ID is: "s << max_id << endl;
+        for (const auto& divide_map : copy_to_manipulate) {
+            for (const auto& ID_and_Rel : divide_map.second) {
+                if (ID_and_Rel.first > max_id) {
+                    max_id = ID_and_Rel.first;
+
                 }
             }
         }
 
 
         for (int i = 0; i <= max_id; ++i) {
-            for (const auto& a : copy_to_manipulate) {
-                if (query_words.count(a.first) > 0 && a.second.count(i) > 0) {
-                    double d = a.second.at(i) * IDF.at(a.first);
-                    // cout << "IDF-TF = "s << a.second.at(i) << " * " << IDF.at(a.first) << endl;
-                     //cout << "IDF-TF "s << a.first << " = " << d << " || ID is: "s << i << endl;
-                    to_calc.push_back(d);
+            for (const auto& divide_map : copy_to_manipulate) {
+                if (query_words.count(divide_map.first) > 0 && divide_map.second.count(i) > 0) {
+                    double IDF_TF_of_word = divide_map.second.at(i) * IDF.at(divide_map.first);
+
+                    to_calc.push_back(IDF_TF_of_word);
                 }
             }
 
-            double dd = 0;
+            double relevance = 0;
 
-            for (double d : to_calc) {
-                dd += d;
+            for (double every_IDF_TF : to_calc) {
+                relevance += every_IDF_TF;
             }
 
-            // cout << dd << endl;
-
-            output[i] = dd;
+            output[i] = relevance;
 
             to_calc.clear();
 
