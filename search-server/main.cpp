@@ -40,7 +40,7 @@ void MatchTestDoc() {
     {
         SearchServer server;
         server.AddDocument(doc_id, content, DocumentStatus::ACTUAL, ratings);
-        tuple<vector<string>, DocumentStatus> out = { { "cat"s, "city"s, "in"s }, DocumentStatus::ACTUAL };
+        tuple<vector<string>, DocumentStatus> out = { {"cat"s, "city"s, "in"s}, DocumentStatus::ACTUAL };
         ASSERT(server.MatchDocument("cat in city "s, doc_id) == out);
         out = { {}, DocumentStatus::ACTUAL };
         ASSERT(server.MatchDocument("-cat in city"s, doc_id) == out);
@@ -70,8 +70,7 @@ void TestRelevanceOut() {
 
         auto doc = server.FindTopDocuments("пушистый ухоженный кот"s);
 
-        double relevance = 9999.9999;
-
+        double relevance = doc.front().relevance;
         for (const auto& a : doc) {
             ASSERT(a.relevance <= relevance);
             relevance = a.relevance;
@@ -108,10 +107,8 @@ void TestCostomPredicat() {
 
         auto doc = server.FindTopDocuments("cat in the city"s, [](int document_id, DocumentStatus status, int rating) { return document_id == 1; });
 
-        for (const auto& a : doc) {
-            ASSERT_EQUAL(a.id, 1);
-        }
         ASSERT_EQUAL(doc.size(), 1);
+        ASSERT_EQUAL(doc[0].id, 1);
 
     }
 
@@ -143,6 +140,8 @@ void TestStatusFind() {
         auto doc = server.FindTopDocuments("cat in the city"s, DocumentStatus::ACTUAL);
 
         ASSERT_EQUAL(doc.size(), 2);
+        ASSERT_EQUAL(doc[0].id, 42);
+        ASSERT_EQUAL(doc[1].id, 62);
     }
 
 }
