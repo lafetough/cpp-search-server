@@ -7,10 +7,13 @@
 #include <utility>
 #include <vector>
 #include <stdexcept>
+#include <numeric>
 
 using namespace std;
 
 const int MAX_RESULT_DOCUMENT_COUNT = 5;
+
+constexpr double EPSILON = 1e-6;
 
 string ReadLine() {
     string s;
@@ -86,7 +89,7 @@ public:
 
         for (const string& word : stop_words_) {
             if (!IsCorrectWord(word)) {
-                throw invalid_argument("Invalid Stop words"s);
+                throw invalid_argument("Invalid stop word: "s + word);
             }
         }
     }
@@ -100,13 +103,16 @@ public:
     void AddDocument(int document_id, const string& document, DocumentStatus status,
         const vector<int>& ratings) {
         const vector<string> words = SplitIntoWordsNoStop(document);
-        if (document_id < 0 || documents_.count(document_id)) {
-            throw invalid_argument("Invalid document"s);
+        if (document_id < 0) {
+            throw invalid_argument("Invalid document ID: entered ID is less then 0!"s);
+        }
+        if (documents_.count(document_id)) {
+            throw invalid_argument("Invalid document ID: entered ID is already exist"s);
         }
         const double inv_word_count = 1.0 / words.size();
         for (const string& word : words) {
             if (!IsCorrectWord(word)) {
-                throw invalid_argument("Invalid document"s);
+                throw invalid_argument("Invalid document: document contains invalid symbols!"s);
             }
             word_to_document_freqs_[word][document_id] += inv_word_count;
         }
@@ -123,7 +129,7 @@ public:
 
         sort(matched_documents.begin(), matched_documents.end(),
             [](const Document& lhs, const Document& rhs) {
-                if (abs(lhs.relevance - rhs.relevance) < 1e-6) {
+                if (abs(lhs.relevance - rhs.relevance) < EPSILON) {
                     return lhs.rating > rhs.rating;
                 }
                 else {
@@ -222,10 +228,7 @@ private:
         if (ratings.empty()) {
             return 0;
         }
-        int rating_sum = 0;
-        for (const int rating : ratings) {
-            rating_sum += rating;
-        }
+        int rating_sum = accumulate(ratings.begin(), ratings.end(), 0);
         return rating_sum / static_cast<int>(ratings.size());
     }
 
