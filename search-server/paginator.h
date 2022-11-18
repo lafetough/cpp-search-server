@@ -1,5 +1,7 @@
 #pragma once
 #include <vector>
+#include <cassert>
+#include <ostream>
 
 template<typename Iterator>
 class IteratorRange {
@@ -23,6 +25,8 @@ class Paginator {
 
 public:
     Paginator(Iterator first, Iterator last, int page_size) {
+        
+        assert(last >= first && page_size > 0);
 
         int all_docs_amount = distance(first, last);
         int fully_filled_pages_amount = all_docs_amount / page_size;
@@ -59,4 +63,19 @@ auto Paginate(const Container& c, size_t page_size);
 template <typename Container>
 auto Paginate(const Container& c, size_t page_size) {
     return Paginator(begin(c), end(c), page_size);
+}
+
+template<typename Iterator>
+std::ostream& operator<<(std::ostream& o, IteratorRange<Iterator> iter);
+
+template<typename Iterator>
+std::ostream& operator<<(std::ostream& o, IteratorRange<Iterator> iter) {
+
+    if (iter.begin() == iter.end()) {
+        o << *iter.begin();
+        return o;
+    }
+    o << *iter.begin() << *iter.end();
+    return o;
+
 }

@@ -5,8 +5,10 @@
 #include "read_input_functions.h"
 #include "string_processing.h"
 
+using namespace std;
+
 int main() {
-    using namespace std;
+
     SearchServer search_server("and in at"s);
     RequestQueue request_queue(search_server);
     search_server.AddDocument(1, "curly cat curly tail"s, DocumentStatus::ACTUAL, { 7, 2, 7 });

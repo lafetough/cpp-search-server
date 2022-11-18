@@ -1,10 +1,17 @@
 #include "read_input_functions.h"
+#include <iostream>
+#include <string>
 
-std::ostream& operator<<(std::ostream& out, const Document& iter) {
+std::string ReadLine() {
+    std::string s;
+    getline(std::cin, s);
+    return s;
+}
 
-    using namespace std;
-    out << "{ document_id = "s << iter.id << ", relevance = "s << iter.relevance << ", rating = "s << iter.rating << " }"s;
-    return out;
-
+int ReadLineWithNumber() {
+    int result;
+    std::cin >> result;
+    ReadLine();
+    return result;
 }
 

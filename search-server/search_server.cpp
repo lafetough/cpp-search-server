@@ -8,6 +8,7 @@
 #include <string>
 #include <utility>
 #include <ostream>
+#include <numeric>
 
 
 SearchServer::SearchServer(const std::string& stop_words_text)
@@ -78,15 +79,6 @@ std::tuple<std::vector<std::string>, DocumentStatus> SearchServer::MatchDocument
     return { matched_words, documents_.at(document_id).status };
 }
 
-
-
-
-
-
-
-
-
-
 bool SearchServer::IsStopWord(const std::string& word) const {
     return stop_words_.count(word) > 0;
 }
@@ -118,10 +110,8 @@ int SearchServer::ComputeAverageRating(const std::vector<int>& ratings) {
     if (ratings.empty()) {
         return 0;
     }
-    int rating_sum = 0;
-    for (const int rating : ratings) {
-        rating_sum += rating;
-    }
+    int rating_sum = std::accumulate(ratings.begin(), ratings.end(), 0);
+
     return rating_sum / static_cast<int>(ratings.size());
 }
 
