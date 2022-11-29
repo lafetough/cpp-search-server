@@ -6,11 +6,14 @@
 #include <vector>
 #include <algorithm>
 #include "string_processing.h"
+#include <unordered_set>
 
 
 const int MAX_RESULT_DOCUMENT_COUNT = 5;
 
 const double EPSILON = 1e-6;
+
+
 
 class SearchServer {
 public:
@@ -33,7 +36,15 @@ public:
 
     int GetDocumentCount() const;
 
-    int GetDocumentId(int index) const;
+    std::map<int, std::unordered_set<std::string>> GetDocumentsByWords() const;
+
+    void RemoveDocument(int document_id) ;
+
+    std::vector<int>::const_iterator begin() const;
+
+    std::vector<int>::const_iterator end() const;
+
+    const std::map<std::string, double>& GetWordFrequencies(int document_id) const;
 
     std::tuple<std::vector<std::string>, DocumentStatus> MatchDocument(const std::string& raw_query,
         int document_id) const;
@@ -45,6 +56,7 @@ private:
         DocumentStatus status;
     };
     const std::set<std::string> stop_words_;
+    std::map<int, std::unordered_set<std::string>> docs_by_words_;
     std::map<std::string, std::map<int, double>> word_to_document_freqs_;
     std::map<int, DocumentData> documents_;
     std::vector<int> document_ids_;
@@ -79,6 +91,12 @@ private:
         DocumentPredicate document_predicate) const;
 
 };
+
+
+
+
+//TEMPLATES --------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
 
 template <typename StringContainer>
 SearchServer::SearchServer(const StringContainer& stop_words)
@@ -149,4 +167,3 @@ std::vector<Document> SearchServer::FindAllDocuments(const Query& query,
     }
     return matched_documents;
 }
-
