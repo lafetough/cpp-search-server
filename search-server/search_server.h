@@ -8,6 +8,9 @@
 #include "string_processing.h"
 #include <execution>
 #include <deque>
+#include <type_traits>
+#include <mutex>
+#include "concurrent_map.h"
 
 const int MAX_RESULT_DOCUMENT_COUNT = 5;
 
@@ -27,17 +30,17 @@ public:
         const std::vector<int>& ratings);
 
     template <typename DocumentPredicate>
-    std::vector<Document> FindTopDocuments(const std::string& raw_query,
+    std::vector<Document> FindTopDocuments(const std::string_view raw_query,
         DocumentPredicate document_predicate) const;
-    std::vector<Document> FindTopDocuments(const std::string& raw_query, DocumentStatus status) const;
-    std::vector<Document> FindTopDocuments(const std::string& raw_query) const;
+    std::vector<Document> FindTopDocuments(const std::string_view raw_query, DocumentStatus status) const;
+    std::vector<Document> FindTopDocuments(const std::string_view raw_query) const;
     template <typename DocumentPredicate, typename ExePolicy>
-    std::vector<Document> FindTopDocuments(const ExePolicy& policy, const std::string& raw_query,
+    std::vector<Document> FindTopDocuments(const ExePolicy& policy, const std::string_view raw_query,
         DocumentPredicate document_predicate) const;
     template<typename ExePolicy>
-    std::vector<Document> FindTopDocuments(const ExePolicy& policy, const std::string& raw_query, DocumentStatus status) const;
+    std::vector<Document> FindTopDocuments(const ExePolicy& policy, const std::string_view raw_query, DocumentStatus status) const;
     template<typename ExePolicy>
-    std::vector<Document> FindTopDocuments(const ExePolicy& policy, const std::string& raw_query) const;
+    std::vector<Document> FindTopDocuments(const ExePolicy& policy, const std::string_view raw_query) const;
 
     int GetDocumentCount() const;
 
@@ -99,6 +102,11 @@ private:
     template <typename DocumentPredicate>
     std::vector<Document> FindAllDocuments(const Query& query,
         DocumentPredicate document_predicate) const;
+    template <typename ExePolicy, typename DocumentPredicate>
+    std::vector<Document> FindAllDocuments(const ExePolicy& policy, const Query& query,
+        DocumentPredicate document_predicate) const;
+
+
 
 };
 
@@ -120,13 +128,16 @@ SearchServer::SearchServer(const StringContainer& stop_words)
 }
 
 template <typename DocumentPredicate>
-std::vector<Document> SearchServer::FindTopDocuments(const std::string& raw_query,
+std::vector<Document> SearchServer::FindTopDocuments(const std::string_view raw_query,
     DocumentPredicate document_predicate) const {
+
+
+
     const auto query = ParseQuery(raw_query);
 
     auto matched_documents = FindAllDocuments(query, document_predicate);
 
-    sort(matched_documents.begin(), matched_documents.end(),
+    std::sort(matched_documents.begin(), matched_documents.end(),
         [](const Document& lhs, const Document& rhs) {
             if (std::abs(lhs.relevance - rhs.relevance) < EPSILON) {
                 return lhs.rating > rhs.rating;
@@ -142,6 +153,66 @@ std::vector<Document> SearchServer::FindTopDocuments(const std::string& raw_quer
     return matched_documents;
 }
 
+template <typename DocumentPredicate, typename ExePolicy>
+std::vector<Document> SearchServer::FindTopDocuments(const ExePolicy& policy, const std::string_view raw_query,
+    DocumentPredicate document_predicate) const {
+
+    if constexpr (std::is_same_v<ExePolicy, std::execution::sequenced_policy>) {
+        return FindTopDocuments(raw_query, document_predicate);
+    }
+
+    auto query = ParseQuery(std::execution::par, raw_query);
+
+    std::sort(
+        policy,
+        query.minus_words.begin(),
+        query.minus_words.end()
+    );
+    query.minus_words.erase(
+        std::unique(policy, query.minus_words.begin(), query.minus_words.end()),
+        query.minus_words.end()
+    );
+
+    std::sort(
+        policy,
+        query.plus_words.begin(),
+        query.plus_words.end()
+    );
+    query.plus_words.erase(
+        std::unique(policy, query.plus_words.begin(), query.plus_words.end()),
+        query.plus_words.end()
+    );
+
+    auto matched_documents = FindAllDocuments(query, document_predicate);
+
+    std::sort(
+        policy,
+        matched_documents.begin(),
+        matched_documents.end(),
+        [](const Document& lhs, const Document& rhs) {
+            return std::abs(lhs.relevance - rhs.relevance) < EPSILON
+                ? lhs.rating > rhs.rating
+                : lhs.relevance > rhs.relevance;
+        }
+    );
+
+    if (matched_documents.size() > MAX_RESULT_DOCUMENT_COUNT) {
+        matched_documents.resize(MAX_RESULT_DOCUMENT_COUNT);
+    }
+
+    return matched_documents;
+
+}
+template<typename ExePolicy>
+std::vector<Document> SearchServer::FindTopDocuments(const ExePolicy& policy, const std::string_view raw_query, DocumentStatus status) const {
+    return FindTopDocuments(policy, raw_query, [status](int document_id, DocumentStatus document_status, int rating) {
+        return document_status == status;});
+
+}
+template<typename ExePolicy>
+std::vector<Document> SearchServer::FindTopDocuments(const ExePolicy& policy, const std::string_view raw_query) const {
+    return FindTopDocuments(policy, raw_query, DocumentStatus::ACTUAL);
+}
 
 
 template <typename DocumentPredicate>
@@ -175,5 +246,75 @@ std::vector<Document> SearchServer::FindAllDocuments(const Query& query,
         matched_documents.push_back(
             { document_id, relevance, documents_.at(document_id).rating });
     }
+    return matched_documents;
+}
+
+template <typename ExePolicy, typename DocumentPredicate>
+std::vector<Document> SearchServer::FindAllDocuments(const ExePolicy& policy, const Query& query,
+    DocumentPredicate document_predicate) const {
+
+    if constexpr (std::is_same_v<ExePolicy, std::execution::sequenced_policy>) {
+        return FindAllDocuments(query, document_predicate);
+    }
+
+    ConcurrentMap<int, double> document_to_relevance(150);
+
+    std::for_each(
+        std::execution::par,
+        query.plus_words.begin(),
+        query.plus_words.end(),
+        [&](const std::string_view& word) {
+            if (word_to_id_freqs_.count(word) == 0) {
+                return;
+            }
+            const double inverse_document_freq = ComputeWordInverseDocumentFreq(word);
+            std::for_each(
+                std::execution::par,
+                word_to_id_freqs_.at(word).begin(),
+                word_to_id_freqs_.at(word).end(),
+                [&](const auto& document) {
+                    const auto& document_data = documents_.at(document.first);
+                    if (document_predicate(document.first, document_data.status, document_data.rating)) {
+                        document_to_relevance[document.first] += document.second * inverse_document_freq;
+                    }
+                }
+            );
+        }
+    );
+    std::for_each(
+        std::execution::par,
+        query.minus_words.begin(),
+        query.minus_words.end(),
+        [&](const std::string_view word) {
+            if (word_to_id_freqs_.count(word) == 0) {
+                return;
+            }
+            for (const auto [document_id, _] : word_to_id_freqs_.at(word)) {
+                document_to_relevance.erase(document_id);
+            }
+        }
+    );
+
+    std::vector<Document> matched_documents;
+    std::mutex locker;
+    //auto builded_map = document_to_relevance.BuildOrdinaryMap();
+    std::for_each(
+        std::execution::par,
+        document_to_relevance.BuildOrdinaryMap().begin(),
+        document_to_relevance.BuildOrdinaryMap().end(),
+        [&](const auto& content) {
+            Document* ptr;
+            {
+                std::lock_guard g(locker);
+                ptr = &matched_documents.emplace_back();
+            }
+            *ptr = { content.first, content.second, documents_.at(content.first).rating };
+        }
+    );
+
+    //for (const auto [document_id, relevance] : document_to_relevance) {
+    //    matched_documents.push_back(
+    //        { document_id, relevance, documents_.at(document_id).rating });
+    //}
     return matched_documents;
 }

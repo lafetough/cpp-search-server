@@ -46,14 +46,14 @@ void SearchServer::AddDocument(int document_id, const std::string_view document,
     document_ids_.insert(document_id);
 }
 
-std::vector<Document> SearchServer::FindTopDocuments(const std::string& raw_query, DocumentStatus status) const {
+std::vector<Document> SearchServer::FindTopDocuments(const std::string_view raw_query, DocumentStatus status) const {
     return FindTopDocuments(
         raw_query, [status](int document_id, DocumentStatus document_status, int rating) {
             return document_status == status;
         });
 }
 
-std::vector<Document> SearchServer::FindTopDocuments(const std::string& raw_query) const {
+std::vector<Document> SearchServer::FindTopDocuments(const std::string_view raw_query) const {
     return FindTopDocuments(raw_query, DocumentStatus::ACTUAL);
 }
 
@@ -297,8 +297,10 @@ SearchServer::QueryWord SearchServer::ParseQueryWord(const std::string_view text
 }
 
 SearchServer::Query SearchServer::ParseQuery(const std::string_view text) const {
+
     SearchServer::Query result;
     
+
     for (const std::string_view word : SplitIntoWords(text)) {
         const auto query_word = ParseQueryWord(word);
         if (!query_word.is_stop) {
@@ -334,6 +336,7 @@ SearchServer::Query SearchServer::ParseQuery(const std::string_view text) const 
     return result;
 
 }
+
 
 SearchServer::Query SearchServer::ParseQuery(const std::execution::parallel_policy ,const std::string_view& text) const {
 
