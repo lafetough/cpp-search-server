@@ -183,7 +183,7 @@ std::vector<Document> SearchServer::FindTopDocuments(const ExePolicy& policy, co
         query.plus_words.end()
     );
 
-    auto matched_documents = FindAllDocuments(query, document_predicate);
+    auto matched_documents = FindAllDocuments(policy, query, document_predicate);
 
     std::sort(
         policy,
@@ -275,7 +275,7 @@ std::vector<Document> SearchServer::FindAllDocuments(const ExePolicy& policy, co
                 [&](const auto& document) {
                     const auto& document_data = documents_.at(document.first);
                     if (document_predicate(document.first, document_data.status, document_data.rating)) {
-                        document_to_relevance[document.first] += document.second * inverse_document_freq;
+                        document_to_relevance[document.first].ref_to_value += document.second * inverse_document_freq;
                     }
                 }
             );
@@ -295,13 +295,15 @@ std::vector<Document> SearchServer::FindAllDocuments(const ExePolicy& policy, co
         }
     );
 
+    const auto builded = std::move(document_to_relevance.BuildOrdinaryMap());
     std::vector<Document> matched_documents;
+    matched_documents.reserve(builded.size());
     std::mutex locker;
-    //auto builded_map = document_to_relevance.BuildOrdinaryMap();
+
     std::for_each(
         std::execution::par,
-        document_to_relevance.BuildOrdinaryMap().begin(),
-        document_to_relevance.BuildOrdinaryMap().end(),
+        builded.begin(),
+        builded.end(),
         [&](const auto& content) {
             Document* ptr;
             {
@@ -312,9 +314,5 @@ std::vector<Document> SearchServer::FindAllDocuments(const ExePolicy& policy, co
         }
     );
 
-    //for (const auto [document_id, relevance] : document_to_relevance) {
-    //    matched_documents.push_back(
-    //        { document_id, relevance, documents_.at(document_id).rating });
-    //}
     return matched_documents;
 }

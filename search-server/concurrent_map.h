@@ -41,7 +41,7 @@ public:
 
     void erase(const Key& key) {
         auto& bucket = buckets_[static_cast<uint64_t>(key) % buckets_.size()];
-        buckets_[bucket].map.erase(key);
+        bucket.map.erase(key);
     }
 
     std::map<Key, Value> BuildOrdinaryMap() {
@@ -56,52 +56,3 @@ public:
 private:
     std::vector<Bucket> buckets_;
 };
-
-/*
-template <typename Value>
-class ConcurrentSet {
-private:
-    struct Bucket {
-        std::mutex mutex;
-        std::set<Value> set;
-    };
-
-public:
-    static_assert(std::is_integral_v<Value>, "ConcurrentMap supports only integer keys");
-
-    struct Access {
-        std::lock_guard<std::mutex> guard;
-        Value& ref_to_value;
-
-        Access(const Value& key, Bucket& bucket)
-            : guard(bucket.mutex)
-            , ref_to_value(bucket.set[key]) {
-        }
-    };
-
-    explicit ConcurrentSet(size_t bucket_count)
-        : buckets_(bucket_count) {
-    }
-
-    Access operator[](const Value& key) {
-        auto& bucket = buckets_[static_cast<uint64_t>(key) % buckets_.size()];
-        return { key, bucket };
-    }
-
-    void erase(const Value& key) {
-        auto& bucket = buckets_[static_cast<uint64_t>(key) % buckets_.size()];
-        buckets_[bucket].set.erase(key);
-    }
-
-    std::set<Value> BuildOrdinarySet() {
-        std::set<Value> result;
-        for (auto& [mutex, set] : buckets_) {
-            std::lock_guard g(mutex);
-            result.insert(set.begin(), set.end());
-        }
-        return result;
-    }
-
-private:
-    std::vector<Bucket> buckets_;
-}*/;
